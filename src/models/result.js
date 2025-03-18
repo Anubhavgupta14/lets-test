@@ -27,6 +27,7 @@ const ResultSchema = new mongoose.Schema(
           ref: 'Question',
           required: true,
         },
+        subject: String,
         selectedOption: String, // For MCQ
         numericalValue: Number, // For numerical
         isCorrect: Boolean,

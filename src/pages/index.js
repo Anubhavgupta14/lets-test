@@ -87,7 +87,11 @@ export default function Home() {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button className="w-full" onClick={()=>{router.push(`/test/${test._id}`)}}>Start Test</Button>
+                {!test.isActive ? 
+                <Button className="w-full cursor-pointer" onClick={()=>{router.push(`/result/${test._id}`)}}>Result</Button>
+                :
+                <Button className="w-full cursor-pointer" onClick={()=>{router.push(`/test/${test._id}`)}}>Start Test</Button>
+                }
               </CardFooter>
             </Card>
           ))}

@@ -127,7 +127,6 @@ export default async function handler(req, res) {
         score = isCorrect ? 4 : -1;
       }
     } else if (question.questionType === 'Numerical' && numericalValue !== undefined) {
-      console.log("Numerical")
       // For numerical questions, check if there's a correctNumericalValue
       if (question.numericalAnswer !== undefined) {
         isCorrect = numericalValue == question.numericalAnswer;
@@ -138,12 +137,12 @@ export default async function handler(req, res) {
     // Update or add the answer
     if (existingAnswerIndex !== -1) {
       // Update existing answer
-      console.log("running")
       result.answers[existingAnswerIndex] = {
         ...result.answers[existingAnswerIndex],
         question: result.answers[existingAnswerIndex].question,
         selectedOption: selectedOption || result.answers[existingAnswerIndex].selectedOption,
         numericalValue: numericalValue !== undefined ? numericalValue : result.answers[existingAnswerIndex].numericalValue,
+        subject: question.subject,
         isCorrect: (selectedOption || numericalValue !== undefined) ? isCorrect : result.answers[existingAnswerIndex].isCorrect,
         score: (selectedOption || numericalValue !== undefined) ? score : result.answers[existingAnswerIndex].score,
         isMarkedForReview: isMarkedForReview !== undefined ? isMarkedForReview : result.answers[existingAnswerIndex].isMarkedForReview
@@ -154,6 +153,7 @@ export default async function handler(req, res) {
         question: questionId,
         selectedOption,
         numericalValue,
+        subject: question.subject,
         isCorrect,
         score,
         isMarkedForReview: isMarkedForReview || false

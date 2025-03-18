@@ -11,6 +11,14 @@ import axios from "axios"
 import { useRouter } from "next/router"
 import { toast } from "sonner"
 import Cookies from 'js-cookie';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function TestPage() {
@@ -26,15 +34,21 @@ export default function TestPage() {
   const [physicsSelectedOptions, setPhysicsSelectedOptions] = useState({})
   const [chemistrySelectedOptions, setChemistrySelectedOptions] = useState({})
   const [mathematicsSelectedOptions, setMathematicsSelectedOptions] = useState({})
-  const [finalSelectedOption, setFinalSelectedOption] = useState(null)
+
+  // Separate state for numerical answers by subject
+  const [physicsNumericalAnswers, setPhysicsNumericalAnswers] = useState({})
+  const [chemistryNumericalAnswers, setChemistryNumericalAnswers] = useState({})
+  const [mathematicsNumericalAnswers, setMathematicsNumericalAnswers] = useState({})
 
   const [timeRemaining, setTimeRemaining] = useState(10800) // 3 hours in seconds
   const [currentSubject, setCurrentSubject] = useState("Physics")
+  const [isTimeUpDialogOpen, setIsTimeUpDialogOpen] = useState(false)
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false)
   const [questions, setQuestions] = useState([])
   const token = Cookies.get('token');
   const { id } = router.query
   const [user, setUser] = useState({})
+  const [testStatus, setTestStatus] = useState(true)
 
   const fetchTest = async () => {
     try {
@@ -45,6 +59,7 @@ export default function TestPage() {
       });
 
       setQuestions(response.data.data)
+      setTestStatus(response.data.status)
     }
     catch (err) {
       console.log(err)
@@ -67,8 +82,18 @@ export default function TestPage() {
     }
   }
 
-  const syncScore = async (questionId) => {
-    
+  const makeTestInActive = async () => {
+    try {
+      const res = await axios.post("/api/test/updateTestStatus", {
+        testId: id,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+    }
+    catch (err) {
+      console.log(err)
+    }
   }
 
   useEffect(() => {
@@ -81,11 +106,23 @@ export default function TestPage() {
   // Timer effect
   useEffect(() => {
     const timer = setInterval(() => {
-      setTimeRemaining((prev) => (prev > 0 ? prev - 1 : 0))
+      setTimeRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          setIsTimeUpDialogOpen(true) // Show the dialog when time is up
+          return 0
+        }
+        return prev - 1
+      })
     }, 1000)
 
     return () => clearInterval(timer)
   }, [])
+
+  const handleViewResults = () => {
+    makeTestInActive()
+    router.push(`/result/${id}`)
+  }
 
   // Helper function to get current subject's question status
   const getCurrentQuestionStatus = () => {
@@ -149,6 +186,36 @@ export default function TestPage() {
     }
   }
 
+  // Helper function to get current subject's numerical answers
+  const getCurrentNumericalAnswers = () => {
+    switch (currentSubject) {
+      case "Physics":
+        return physicsNumericalAnswers;
+      case "Chemistry":
+        return chemistryNumericalAnswers;
+      case "Mathematics":
+        return mathematicsNumericalAnswers;
+      default:
+        return physicsNumericalAnswers;
+    }
+  }
+
+  // Helper function to set current subject's numerical answers
+  const setCurrentNumericalAnswers = (newAnswers) => {
+    switch (currentSubject) {
+      case "Physics":
+        setPhysicsNumericalAnswers(newAnswers);
+        break;
+      case "Chemistry":
+        setChemistryNumericalAnswers(newAnswers);
+        break;
+      case "Mathematics":
+        setMathematicsNumericalAnswers(newAnswers);
+        break;
+      default:
+        setPhysicsNumericalAnswers(newAnswers);
+    }
+  }
 
   // Get the currently selected option for the current question
   const getSelectedOption = () => {
@@ -165,6 +232,33 @@ export default function TestPage() {
     });
   }
 
+  // Get the current numerical answer for the current question
+  const getNumericalAnswer = () => {
+    const currentAnswers = getCurrentNumericalAnswers();
+    return currentAnswers[currentQuestion] || "";
+  }
+
+  // Set the numerical answer for the current question
+  const setNumericalAnswer = (value) => {
+    const currentAnswers = getCurrentNumericalAnswers();
+    setCurrentNumericalAnswers({
+      ...currentAnswers,
+      [currentQuestion]: value
+    });
+  }
+
+  // Check if current question has a valid answer (either option selected or numerical value)
+  const hasValidAnswer = () => {
+    const question = filteredQuestions[currentQuestion - 1];
+    if (!question) return false;
+
+    if (question.questionType === "Numerical") {
+      const numericalValue = getNumericalAnswer();
+      return numericalValue !== "" && numericalValue !== null;
+    } else {
+      return getSelectedOption() !== null;
+    }
+  }
 
   const formatTime = (seconds) => {
     const totalMinutes = Math.floor(seconds / 60)
@@ -226,56 +320,80 @@ export default function TestPage() {
   }
 
   // Handle saving answer
-  const saveAnswer = async(markForReview = false, questionId) => {
+  const saveAnswer = async (markForReview = false, questionId, questionType) => {
     const currentStatus = getCurrentQuestionStatus()
-    const selectedOption = getSelectedOption();
-
-    if (selectedOption) {
-      setCurrentQuestionStatus({
-        ...currentStatus,
-        [currentQuestion]: markForReview ? "answered-review" : "answered",
-      })
-    } else {
-      setCurrentQuestionStatus({
-        ...currentStatus,
-        [currentQuestion]: markForReview ? "review" : "not-answered",
-      })
-    }
-
-    // Move to next question if not the last one
-    if (currentQuestion < filteredQuestions.length) {
-      setCurrentQuestion(currentQuestion + 1)
-    }
-
-    console.log(selectedOption,"Selected")
-    console.log(currentStatus,"current status")
-    console.log(questionId,"question Id")
+    let isAnswered = false;
 
     try {
-      const response = await axios.post(`/api/test/updateScore`, {
-        "userId": user._id,
-        "testId": id,
-        "questionId": questionId,
-        "selectedOption": selectedOption,
-        "isMarkedForReview": false,
-        "action": "saveAndNext"
-      })
+      if (questionType === "Numerical") {
+        const numericalValue = getNumericalAnswer();
+        isAnswered = numericalValue !== "" && numericalValue !== null;
 
-      toast.success("Saved Successfully")
+        if (isAnswered) {
+          await axios.post(`/api/test/updateScore`, {
+            "userId": user._id,
+            "testId": id,
+            "questionId": questionId,
+            "numericalValue": numericalValue,
+            "isMarkedForReview": markForReview,
+            "action": markForReview ? "markForReview" : "saveAndNext"
+          });
+        }
+      } else {
+        const selectedOption = getSelectedOption();
+        isAnswered = selectedOption !== null;
+
+        if (isAnswered) {
+          await axios.post(`/api/test/updateScore`, {
+            "userId": user._id,
+            "testId": id,
+            "questionId": questionId,
+            "selectedOption": getSelectedOption(),
+            "isMarkedForReview": markForReview,
+            "action": markForReview ? "markForReview" : "saveAndNext"
+          });
+        }
+      }
+
+      // Update question status based on whether an answer was provided
+      setCurrentQuestionStatus({
+        ...currentStatus,
+        [currentQuestion]: isAnswered
+          ? (markForReview ? "answered-review" : "answered")
+          : (markForReview ? "review" : "not-answered"),
+      });
+
+      // Move to next question if not the last one
+      if (currentQuestion < filteredQuestions.length) {
+        setCurrentQuestion(currentQuestion + 1);
+      }
+
+      toast.success("Saved Successfully");
     }
     catch (err) {
-      console.log(err)
-      toast.error("Something went wrong while submitting answers. Contact Admin")
+      console.log(err);
+      toast.error("Something went wrong while submitting answers. Contact Admin");
     }
   }
 
   // Handle clearing response
   const clearResponse = () => {
-    // Clear the selected option for the current question
-    const currentOptions = getCurrentSelectedOptions();
-    const newOptions = { ...currentOptions };
-    delete newOptions[currentQuestion];
-    setCurrentSelectedOptions(newOptions);
+    const question = filteredQuestions[currentQuestion - 1];
+    if (!question) return;
+
+    if (question.questionType === "Numerical") {
+      // Clear the numerical answer for the current question
+      const currentAnswers = getCurrentNumericalAnswers();
+      const newAnswers = { ...currentAnswers };
+      delete newAnswers[currentQuestion];
+      setCurrentNumericalAnswers(newAnswers);
+    } else {
+      // Clear the selected option for the current question
+      const currentOptions = getCurrentSelectedOptions();
+      const newOptions = { ...currentOptions };
+      delete newOptions[currentQuestion];
+      setCurrentSelectedOptions(newOptions);
+    }
 
     // Update the question status
     const currentStatus = getCurrentQuestionStatus();
@@ -300,6 +418,17 @@ export default function TestPage() {
 
   // Get current question
   const question = filteredQuestions[currentQuestion - 1]
+
+  if (!testStatus) {
+    return (
+      <div className="h-[100vh] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-5">
+          <div>Test inactive. Contact Admin to reattempt.</div>
+          <Button onClick={() => { router.push("/") }} className="bg-green-500 cursor-pointer hover:bg-green-600 text-white shadow-sm px-5 py-2 h-auto">Back to Test</Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -415,9 +544,9 @@ export default function TestPage() {
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-6 flex-1 flex gap-6">
+      <div className="container mx-auto px-4 py-6 flex-1 flex flex-col-reverse md:flex-row gap-6">
         {/* Question Area (70%) */}
-        <div className="w-[70%]">
+        <div className="w-full md:w-[70%]">
           <Card className="shadow-md border border-gray-200 overflow-hidden">
             <CardHeader className="border-b pb-4">
               <div className="flex justify-between items-center">
@@ -454,30 +583,44 @@ export default function TestPage() {
                 </div>
               ))}
 
-              <div className="space-y-3">
-                {question && question?.options?.map((option) => (
-                  <div
-                    key={option._id}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all ${getSelectedOption() === option._id
-                      ? "border-blue-500 bg-blue-50 shadow-md"
-                      : "border-gray-200 hover:border-blue-200 hover:bg-blue-50/30"
-                      }`}
-                    onClick={() => setSelectedOption(option._id)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="text-gray-800">{option.text}</div>
+              {question && question.questionType !== "Numerical" && (
+                <div className="space-y-3">
+                  {question.options?.map((option) => (
+                    <div
+                      key={option._id}
+                      className={`p-4 border rounded-lg cursor-pointer transition-all ${getSelectedOption() === option._id
+                        ? "border-blue-500 bg-blue-50 shadow-md"
+                        : "border-gray-200 hover:border-blue-200 hover:bg-blue-50/30"
+                        }`}
+                      onClick={() => setSelectedOption(option._id)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="text-gray-800">{option.text}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
+
+              {question && question.questionType === "Numerical" && (
+                <div className="flex gap-2 items-center mt-5">
+                  <label className="text-gray-500">Answer</label>
+                  <input
+                    placeholder="Type numerical answer"
+                    className="border p-2 rounded w-48"
+                    value={getNumericalAnswer()}
+                    onChange={(e) => setNumericalAnswer(e.target.value)}
+                  />
+                </div>
+              )}
 
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button className="bg-green-500 cursor-pointer hover:bg-green-600 text-white shadow-sm px-5 py-2 h-auto"
-                  onClick={() => saveAnswer(false, question._id)}>
+                  onClick={() => saveAnswer(false, question?._id, question?.questionType)}>
                   SAVE & NEXT
                 </Button>
                 <Button className="bg-blue-500 cursor-pointer hover:bg-blue-600 text-white shadow-sm px-5 py-2 h-auto"
-                  onClick={() => saveAnswer(true, question._id)}>
+                  onClick={() => saveAnswer(true, question?._id, question?.questionType)}>
                   SAVE & MARK FOR REVIEW
                 </Button>
                 <Button
@@ -541,7 +684,7 @@ export default function TestPage() {
         </div>
 
         {/* Question Navigation (30%) */}
-        <div className="w-[30%]">
+        <div className="w-full md:w-[30%]">
           <Card className="shadow-md border border-gray-200">
             <CardHeader className="border-b pb-4">
               <CardTitle className="text-blue-700">Question Palette</CardTitle>
@@ -589,6 +732,78 @@ export default function TestPage() {
           </Card>
         </div>
       </div>
+      <Dialog open={isTimeUpDialogOpen} >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-center">Time's Up!</DialogTitle>
+            <DialogDescription className="text-center pt-4">
+              <div className="flex justify-center mb-4">
+                <Clock className="h-16 w-16 text-blue-600" />
+              </div>
+              <p className="text-lg font-medium">Your test has been completed.</p>
+              <p className="mt-2">Your answers have been automatically saved.</p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button
+              className="mt-4 bg-green-600 hover:bg-green-700 text-white px-8 py-2 shadow-md text-lg"
+              onClick={handleViewResults}
+            >
+              View Results
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-center">Submit Test</DialogTitle>
+            <DialogDescription className="text-center pt-4">
+              <div className="flex justify-center mb-4">
+                <AlertCircle className="h-16 w-16 text-orange-500" />
+              </div>
+              <p className="text-lg font-medium">Are you sure you want to submit your test?</p>
+              <p className="mt-2">
+                Once submitted, you won't be able to make any changes to your answers.
+              </p>
+
+              {/* Show summary of answered questions */}
+              <div className="mt-4 bg-gray-50 p-3 rounded-md border border-gray-200">
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="flex flex-col items-center">
+                    <span className="font-medium text-green-600">{statusCounts.answered + statusCounts.answeredReview}</span>
+                    <span className="text-gray-600">Answered</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="font-medium text-red-600">{statusCounts.notAnswered + statusCounts.notVisited}</span>
+                    <span className="text-gray-600">Unanswered</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="font-medium text-purple-600">{statusCounts.review}</span>
+                    <span className="text-gray-600">For Review</span>
+                  </div>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center gap-3">
+            <Button
+              variant="outline"
+              className="mt-4 border-gray-300 text-gray-700 px-6"
+              onClick={() => setIsSubmitDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="mt-4 bg-green-600 hover:bg-green-700 text-white px-6 shadow-md"
+              onClick={handleViewResults}
+            >
+              Submit Test
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

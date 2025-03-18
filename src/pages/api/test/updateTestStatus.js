@@ -1,45 +1,36 @@
 import dbConnect from '@/lib/mongodb';
 import Test from '@/models/test';
-import Question from '@/models/question';
 import jwt from 'jsonwebtoken';
 
 export default async function handler(req, res) {
   await dbConnect();
 
-  if (req.method !== 'GET') {
+  if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method Not Allowed' });
   }
 
   try {
-    // Extract token from request headers
-    const token = req.headers.authorization?.split(' ')[1];
 
-    const {id} = req.query;
+    // Extract testId from query parameters since this is a GET request
+    const { testId } = req.body;
     
-    if (!token) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
+    if (!testId) {
+      return res.status(400).json({ success: false, message: 'Test ID is required' });
     }
     
+
     // Find the test by ID
-    const test = await Test.findById(id);
+    const test = await Test.findById(testId);
     
     if (!test) {
       return res.status(404).json({ success: false, message: 'Test not found' });
     }
 
-    // Get the question IDs from the test
-    const questionIds = test.questions;
+    test.isActive = false;
+    await test.save();
     
-    // Fetch all question documents that match the IDs in the test
-    const questionsData = await Question.find({
-      _id: { $in: questionIds }
-    });
-    
-    // Return both the test and the questions data
     return res.status(200).json({
       success: true,
-      data: questionsData,
-      status: test.isActive
     });
     
   } catch (error) {
@@ -47,7 +38,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ success: false, message: 'Invalid token' });
     }
     
-    console.error('Error fetching test and questions:', error);
+    console.error('Error updating test:', error);
     return res.status(500).json({ 
       success: false, 
       message: 'Server error', 

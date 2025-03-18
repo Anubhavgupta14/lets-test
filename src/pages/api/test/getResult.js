@@ -1,7 +1,6 @@
 import dbConnect from '@/lib/mongodb';
-import Test from '@/models/test';
-import Question from '@/models/question';
-import jwt from 'jsonwebtoken';
+import Result from '@/models/result';
+import jwt, { decode } from 'jsonwebtoken';
 
 export default async function handler(req, res) {
   await dbConnect();
@@ -13,33 +12,24 @@ export default async function handler(req, res) {
   try {
     // Extract token from request headers
     const token = req.headers.authorization?.split(' ')[1];
-
-    const {id} = req.query;
     
     if (!token) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    
-    // Find the test by ID
-    const test = await Test.findById(id);
-    
-    if (!test) {
-      return res.status(404).json({ success: false, message: 'Test not found' });
-    }
 
-    // Get the question IDs from the test
-    const questionIds = test.questions;
+    const {testId} = req.query;
     
-    // Fetch all question documents that match the IDs in the test
-    const questionsData = await Question.find({
-      _id: { $in: questionIds }
-    });
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    let tests = {}
+    if(decoded.userId){
+        tests = await Result.findOne({test: testId})
+    }
     
-    // Return both the test and the questions data
     return res.status(200).json({
       success: true,
-      data: questionsData,
-      status: test.isActive
+      data: tests
     });
     
   } catch (error) {
@@ -47,7 +37,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ success: false, message: 'Invalid token' });
     }
     
-    console.error('Error fetching test and questions:', error);
+    console.error('Error fetching tests:', error);
     return res.status(500).json({ 
       success: false, 
       message: 'Server error', 

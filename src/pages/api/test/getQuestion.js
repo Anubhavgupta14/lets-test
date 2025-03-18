@@ -20,11 +20,11 @@ export default async function handler(req, res) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
     
-    const tests = await Test.findById(id);
+    const question = await Question.findById(id);
     
     return res.status(200).json({
       success: true,
-      data: tests,
+      data: question,
     });
     
   } catch (error) {
