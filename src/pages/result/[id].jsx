@@ -410,7 +410,7 @@ export default function TestResults() {
                                                     {selectedQuestion?.numericalAnswer && 
                                                     <div className='text-sm text-gray-500'>
                                                         <div className='mb-2'>Correct Answer : {selectedQuestion?.numericalAnswer}</div>
-                                                        <div>User's Answer : {selectedQuestion?.userAnswer}</div>
+                                                        <div>User Answer : {selectedQuestion?.userAnswer}</div>
                                                     </div>
                                                     }
                                                 </div>
