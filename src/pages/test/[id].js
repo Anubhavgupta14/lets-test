@@ -9,48 +9,51 @@ import { ArrowLeft, ArrowRight, Download, Clock, User, BookOpen, AlertCircle } f
 import Image from "next/image"
 import axios from "axios"
 import { useRouter } from "next/router"
+import { toast } from "sonner"
 import Cookies from 'js-cookie';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function TestPage() {
   const [currentQuestion, setCurrentQuestion] = useState(1)
   const router = useRouter()
-  
+
   // Separate state for question status by subject
   const [physicsQuestionStatus, setPhysicsQuestionStatus] = useState({})
   const [chemistryQuestionStatus, setChemistryQuestionStatus] = useState({})
   const [mathematicsQuestionStatus, setMathematicsQuestionStatus] = useState({})
-  
+
   // Separate state for selected options by subject
   const [physicsSelectedOptions, setPhysicsSelectedOptions] = useState({})
   const [chemistrySelectedOptions, setChemistrySelectedOptions] = useState({})
   const [mathematicsSelectedOptions, setMathematicsSelectedOptions] = useState({})
-  
+  const [finalSelectedOption, setFinalSelectedOption] = useState(null)
+
   const [timeRemaining, setTimeRemaining] = useState(10800) // 3 hours in seconds
   const [currentSubject, setCurrentSubject] = useState("Physics")
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false)
   const [questions, setQuestions] = useState([])
   const token = Cookies.get('token');
-  const {id} = router.query
+  const { id } = router.query
   const [user, setUser] = useState({})
 
-  const fetchTest = async()=>{
-    try{
+  const fetchTest = async () => {
+    try {
       const response = await axios.get(`/api/test/getSpecificQuestions?id=${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-  
+
       setQuestions(response.data.data)
     }
-    catch(err){
+    catch (err) {
       console.log(err)
+      toast.error("Something went wrong in fetching test data. Contact Admin")
     }
   }
 
-  const fetchUser = async()=>{
-    try{
+  const fetchUser = async () => {
+    try {
       const response = await axios.get(`/api/user`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -58,17 +61,22 @@ export default function TestPage() {
       });
       setUser(response.data.data)
     }
-    catch(err){
+    catch (err) {
       console.log(err)
+      toast.error("Something went wrong while fetching user data. Contact Admin")
     }
   }
 
-  useEffect(()=>{
-    if(id){
+  const syncScore = async (questionId) => {
+    
+  }
+
+  useEffect(() => {
+    if (id) {
       fetchTest();
       fetchUser();
     }
-  },[id])
+  }, [id])
 
   // Timer effect
   useEffect(() => {
@@ -81,7 +89,7 @@ export default function TestPage() {
 
   // Helper function to get current subject's question status
   const getCurrentQuestionStatus = () => {
-    switch(currentSubject) {
+    switch (currentSubject) {
       case "Physics":
         return physicsQuestionStatus;
       case "Chemistry":
@@ -95,7 +103,7 @@ export default function TestPage() {
 
   // Helper function to set current subject's question status
   const setCurrentQuestionStatus = (newStatus) => {
-    switch(currentSubject) {
+    switch (currentSubject) {
       case "Physics":
         setPhysicsQuestionStatus(newStatus);
         break;
@@ -109,10 +117,10 @@ export default function TestPage() {
         setPhysicsQuestionStatus(newStatus);
     }
   }
-  
+
   // Helper function to get current subject's selected options
   const getCurrentSelectedOptions = () => {
-    switch(currentSubject) {
+    switch (currentSubject) {
       case "Physics":
         return physicsSelectedOptions;
       case "Chemistry":
@@ -123,10 +131,10 @@ export default function TestPage() {
         return physicsSelectedOptions;
     }
   }
-  
+
   // Helper function to set current subject's selected options
   const setCurrentSelectedOptions = (newOptions) => {
-    switch(currentSubject) {
+    switch (currentSubject) {
       case "Physics":
         setPhysicsSelectedOptions(newOptions);
         break;
@@ -140,13 +148,14 @@ export default function TestPage() {
         setPhysicsSelectedOptions(newOptions);
     }
   }
-  
+
+
   // Get the currently selected option for the current question
   const getSelectedOption = () => {
     const currentOptions = getCurrentSelectedOptions();
     return currentOptions[currentQuestion] || null;
   }
-  
+
   // Set the selected option for the current question
   const setSelectedOption = (optionId) => {
     const currentOptions = getCurrentSelectedOptions();
@@ -155,6 +164,7 @@ export default function TestPage() {
       [currentQuestion]: optionId
     });
   }
+
 
   const formatTime = (seconds) => {
     const totalMinutes = Math.floor(seconds / 60)
@@ -173,7 +183,7 @@ export default function TestPage() {
   }
 
   const filteredQuestions = getQuestionsBySubject(currentSubject)
-  
+
   // Get number of questions for the current subject
   const currentSubjectQuestionCount = filteredQuestions?.length || 25
   const questionNumbers = Array.from({ length: currentSubjectQuestionCount }, (_, i) => i + 1)
@@ -187,7 +197,7 @@ export default function TestPage() {
       review: 0,
       answeredReview: 0
     }
-    
+
     Object.values(currentStatus).forEach(status => {
       if (status === "not-answered") {
         counts.notAnswered++
@@ -203,7 +213,7 @@ export default function TestPage() {
         counts.notVisited--
       }
     })
-    
+
     return counts
   }
 
@@ -216,10 +226,10 @@ export default function TestPage() {
   }
 
   // Handle saving answer
-  const saveAnswer = (markForReview = false) => {
+  const saveAnswer = async(markForReview = false, questionId) => {
     const currentStatus = getCurrentQuestionStatus()
     const selectedOption = getSelectedOption();
-    
+
     if (selectedOption) {
       setCurrentQuestionStatus({
         ...currentStatus,
@@ -236,6 +246,27 @@ export default function TestPage() {
     if (currentQuestion < filteredQuestions.length) {
       setCurrentQuestion(currentQuestion + 1)
     }
+
+    console.log(selectedOption,"Selected")
+    console.log(currentStatus,"current status")
+    console.log(questionId,"question Id")
+
+    try {
+      const response = await axios.post(`/api/test/updateScore`, {
+        "userId": user._id,
+        "testId": id,
+        "questionId": questionId,
+        "selectedOption": selectedOption,
+        "isMarkedForReview": false,
+        "action": "saveAndNext"
+      })
+
+      toast.success("Saved Successfully")
+    }
+    catch (err) {
+      console.log(err)
+      toast.error("Something went wrong while submitting answers. Contact Admin")
+    }
   }
 
   // Handle clearing response
@@ -245,7 +276,7 @@ export default function TestPage() {
     const newOptions = { ...currentOptions };
     delete newOptions[currentQuestion];
     setCurrentSelectedOptions(newOptions);
-    
+
     // Update the question status
     const currentStatus = getCurrentQuestionStatus();
     setCurrentQuestionStatus({
@@ -258,7 +289,7 @@ export default function TestPage() {
   const getStatusColor = (questionNum) => {
     const currentStatus = getCurrentQuestionStatus()
     const status = currentStatus[questionNum]
-    
+
     if (!status || status === "not-visited") return "bg-gray-100 text-gray-800 hover:bg-gray-200"
     if (status === "not-answered") return "bg-red-500 text-white hover:bg-red-600"
     if (status === "answered") return "bg-green-500 text-white hover:bg-green-600"
@@ -268,7 +299,7 @@ export default function TestPage() {
   }
 
   // Get current question
-  const question = filteredQuestions[currentQuestion-1]
+  const question = filteredQuestions[currentQuestion - 1]
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -316,10 +347,10 @@ export default function TestPage() {
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-2 shadow-md">
         <div className="container mx-auto px-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Tabs 
-              defaultValue="Physics" 
-              className="w-full" 
-              value={currentSubject} 
+            <Tabs
+              defaultValue="Physics"
+              className="w-full"
+              value={currentSubject}
               onValueChange={handleSubjectChange}
             >
               <TabsList className="bg-blue-700/40 h-auto p-1 rounded-md gap-4">
@@ -396,7 +427,7 @@ export default function TestPage() {
                     {currentSubject?.toUpperCase()}
                   </span>
                 </CardTitle>
-                
+
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -419,7 +450,7 @@ export default function TestPage() {
 
               {question?.images?.map((img, i) => (
                 <div key={i}>
-                  <Image src={img} height={600} width={600} alt={`Question image ${i+1}`} />
+                  <Image src={img} height={600} width={600} alt={`Question image ${i + 1}`} />
                 </div>
               ))}
 
@@ -427,11 +458,10 @@ export default function TestPage() {
                 {question && question?.options?.map((option) => (
                   <div
                     key={option._id}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                      getSelectedOption() === option._id 
-                        ? "border-blue-500 bg-blue-50 shadow-md" 
-                        : "border-gray-200 hover:border-blue-200 hover:bg-blue-50/30"
-                    }`}
+                    className={`p-4 border rounded-lg cursor-pointer transition-all ${getSelectedOption() === option._id
+                      ? "border-blue-500 bg-blue-50 shadow-md"
+                      : "border-gray-200 hover:border-blue-200 hover:bg-blue-50/30"
+                      }`}
                     onClick={() => setSelectedOption(option._id)}
                   >
                     <div className="flex items-start gap-3">
@@ -442,12 +472,12 @@ export default function TestPage() {
               </div>
 
               <div className="mt-8 flex flex-wrap gap-3">
-                <Button className="bg-green-500 cursor-pointer hover:bg-green-600 text-white shadow-sm px-5 py-2 h-auto" 
-                  onClick={() => saveAnswer(false)}>
+                <Button className="bg-green-500 cursor-pointer hover:bg-green-600 text-white shadow-sm px-5 py-2 h-auto"
+                  onClick={() => saveAnswer(false, question._id)}>
                   SAVE & NEXT
                 </Button>
-                <Button className="bg-blue-500 cursor-pointer hover:bg-blue-600 text-white shadow-sm px-5 py-2 h-auto" 
-                  onClick={() => saveAnswer(true)}>
+                <Button className="bg-blue-500 cursor-pointer hover:bg-blue-600 text-white shadow-sm px-5 py-2 h-auto"
+                  onClick={() => saveAnswer(true, question._id)}>
                   SAVE & MARK FOR REVIEW
                 </Button>
                 <Button
@@ -499,7 +529,7 @@ export default function TestPage() {
                 >
                   NEXT <ArrowRight className="h-4 w-4" />
                 </Button>
-                <Button 
+                <Button
                   className="bg-green-600 hover:bg-green-700 text-white px-6 shadow-md"
                   onClick={() => setIsSubmitDialogOpen(true)}
                 >
@@ -527,9 +557,8 @@ export default function TestPage() {
                       <TooltipTrigger asChild>
                         <Button
                           variant="outline"
-                          className={`h-9 w-9 p-0 text-xs font-medium ${getStatusColor(num)} ${
-                            currentQuestion === num ? "ring-2 ring-offset-1 ring-blue-400" : ""
-                          }`}
+                          className={`h-9 w-9 p-0 text-xs font-medium ${getStatusColor(num)} ${currentQuestion === num ? "ring-2 ring-offset-1 ring-blue-400" : ""
+                            }`}
                           onClick={() => {
                             setCurrentQuestion(num)
                             const currentStatus = getCurrentQuestionStatus()
@@ -551,7 +580,7 @@ export default function TestPage() {
                   </TooltipProvider>
                 ))}
               </div>
-              
+
               <Button className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white shadow-md"
                 onClick={() => setIsSubmitDialogOpen(true)}>
                 SUBMIT TEST

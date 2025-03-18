@@ -63,7 +63,7 @@ export default async function handler(req, res) {
   }
   
   try {
-    const { resultId, userId, testId, questionId, selectedOption, numericalValue, isMarkedForReview, action } = req.body;
+    const { userId, testId, questionId, selectedOption, numericalValue, isMarkedForReview, action } = req.body;
     
     if (!questionId || !action) {
       return res.status(400).json({ message: 'Missing required fields' });
@@ -77,12 +77,14 @@ export default async function handler(req, res) {
     // Find or create result document
     let result;
     
-    if (resultId && mongoose.Types.ObjectId.isValid(resultId)) {
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
       // Try to find existing result
-      result = await Result.findById(resultId);
+      result = await Result.findOne({user: userId});
     }
     
     if (!result) {
+
+      console.log("coming")
       // We need to create a new result
       if (!userId || !testId || !mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(testId)) {
         return res.status(400).json({ message: 'To create a new result, valid userId and testId are required' });
@@ -103,6 +105,8 @@ export default async function handler(req, res) {
     if (!question) {
       return res.status(404).json({ message: 'Question not found' });
     }
+
+    console.log(result,"result")
     
     // Check if the question already exists in answers array
     const existingAnswerIndex = result.answers.findIndex(
@@ -123,10 +127,10 @@ export default async function handler(req, res) {
         score = isCorrect ? 4 : -1;
       }
     } else if (question.questionType === 'Numerical' && numericalValue !== undefined) {
+      console.log("Numerical")
       // For numerical questions, check if there's a correctNumericalValue
-      if (question.correctNumericalValue !== undefined) {
-        const tolerance = question.tolerance || 0;
-        isCorrect = Math.abs(numericalValue - question.correctNumericalValue) <= tolerance;
+      if (question.numericalAnswer !== undefined) {
+        isCorrect = numericalValue == question.numericalAnswer;
         score = isCorrect ? 4 : -1;
       }
     }
@@ -134,8 +138,10 @@ export default async function handler(req, res) {
     // Update or add the answer
     if (existingAnswerIndex !== -1) {
       // Update existing answer
+      console.log("running")
       result.answers[existingAnswerIndex] = {
         ...result.answers[existingAnswerIndex],
+        question: result.answers[existingAnswerIndex].question,
         selectedOption: selectedOption || result.answers[existingAnswerIndex].selectedOption,
         numericalValue: numericalValue !== undefined ? numericalValue : result.answers[existingAnswerIndex].numericalValue,
         isCorrect: (selectedOption || numericalValue !== undefined) ? isCorrect : result.answers[existingAnswerIndex].isCorrect,

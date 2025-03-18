@@ -30,7 +30,8 @@ const ResultSchema = new mongoose.Schema(
         selectedOption: String, // For MCQ
         numericalValue: Number, // For numerical
         isCorrect: Boolean,
-        score: Number, // +4 for correct, -1 for incorrect, 0 for unattempted
+        score: Number, // +4 for correct, -1 for incorrect, 0 for unattempted,
+        isMarkedForReview: Boolean
       },
     ],
     totalScore: {
