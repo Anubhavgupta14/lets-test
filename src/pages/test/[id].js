@@ -735,7 +735,7 @@ export default function TestPage() {
       <Dialog open={isTimeUpDialogOpen} >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl text-center">Time's Up!</DialogTitle>
+            <DialogTitle className="text-xl text-center">Time Up!</DialogTitle>
             <DialogDescription className="text-center pt-4">
               <div className="flex justify-center mb-4">
                 <Clock className="h-16 w-16 text-blue-600" />
@@ -765,7 +765,7 @@ export default function TestPage() {
               </div>
               <p className="text-lg font-medium">Are you sure you want to submit your test?</p>
               <p className="mt-2">
-                Once submitted, you won't be able to make any changes to your answers.
+                Once submitted, you would not be able to make any changes to your answers.
               </p>
 
               {/* Show summary of answered questions */}
